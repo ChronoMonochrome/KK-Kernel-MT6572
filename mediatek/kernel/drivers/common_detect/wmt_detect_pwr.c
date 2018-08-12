@@ -283,6 +283,7 @@ int wmt_detect_sdio_pwr_ctrl (int on)
 {
 	int retval = -1;
 #ifdef MTK_WCN_COMBO_CHIP_SUPPORT	
+#if 0
 	if (0 == on)
 	{
 		/*power off SDIO slot*/
@@ -293,6 +294,7 @@ int wmt_detect_sdio_pwr_ctrl (int on)
 		/*power on SDIO slot*/
 		retval = board_sdio_ctrl(1, 1);
 	}
+#endif
 #else
 	WMT_DETECT_WARN_FUNC("WMT-DETECT: MTK_WCN_COMBO_CHIP_SUPPORT is not set\n");
 #endif

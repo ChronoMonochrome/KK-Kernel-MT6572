@@ -320,7 +320,7 @@ wmt_plat_deinit (VOID)
 
 INT32 wmt_plat_sdio_ctrl (WMT_SDIO_SLOT_NUM sdioPortType, ENUM_FUNC_STATE on)
 {
-    return board_sdio_ctrl(sdioPortType, (FUNC_OFF == on) ? 0 : 1);
+    return 0; /* board_sdio_ctrl(sdioPortType, (FUNC_OFF == on) ? 0 : 1); */
 }
 
 INT32
@@ -1028,15 +1028,19 @@ INT32 wmt_plat_pcm_ctrl(ENUM_PIN_STATE state)
 		{
 		case PIN_STA_MUX:
 		case PIN_STA_INIT:
+#warning fixme
+#if 0
 			mt_set_gpio_mode(GPIO_PCM_DAICLK_PIN, GPIO_PCM_DAICLK_PIN_PCMONLY_MODE);
 			mt_set_gpio_mode(GPIO_PCM_DAIPCMOUT_PIN, GPIO_PCM_DAIPCMOUT_PIN_PCMONLY_MODE);
 			mt_set_gpio_mode(GPIO_PCM_DAIPCMIN_PIN, GPIO_PCM_DAIPCMIN_PIN_PCMONLY_MODE);
 			mt_set_gpio_mode(GPIO_PCM_DAISYNC_PIN, GPIO_PCM_DAISYNC_PIN_PCMONLY_MODE);
+#endif
 			WMT_DBG_FUNC("WMT-PLAT:MT6589 PCM init (pcm) \n");
 			break;
 	
 		case PIN_STA_IN_L:
 		case PIN_STA_DEINIT:
+#if 0
 			mt_set_gpio_mode(GPIO_PCM_DAICLK_PIN, GPIO_PCM_DAICLK_PIN_PCMONLY_MODE);//GPIO_PCM_DAICLK_PIN_M_GPIO);
 			//mt_set_gpio_dir(GPIO_PCM_DAICLK_PIN, GPIO_DIR_OUT);
 			//mt_set_gpio_out(GPIO_PCM_DAICLK_PIN, GPIO_OUT_ZERO);
@@ -1052,6 +1056,7 @@ INT32 wmt_plat_pcm_ctrl(ENUM_PIN_STATE state)
 			mt_set_gpio_mode(GPIO_PCM_DAISYNC_PIN, GPIO_PCM_DAISYNC_PIN_PCMONLY_MODE);//GPIO_PCM_DAISYNC_PIN_M_GPIO);
 			//mt_set_gpio_dir(GPIO_PCM_DAISYNC_PIN, GPIO_DIR_OUT);
 			//mt_set_gpio_out(GPIO_PCM_DAISYNC_PIN, GPIO_OUT_ZERO);
+#endif
 			WMT_DBG_FUNC("WMT-PLAT:MT6589 PCM deinit (out 0) \n");
 			break;
 	
@@ -1131,9 +1136,12 @@ INT32 wmt_plat_i2s_ctrl(ENUM_PIN_STATE state)
 			    {
 			    case PIN_STA_INIT:
 			    case PIN_STA_MUX:
+#warning fixme
+#if 0
 			            mt_set_gpio_mode(GPIO_COMBO_I2S_CK_PIN, GPIO_COMBO_I2S_CK_PIN_I2SONLY_MODE);
 			            mt_set_gpio_mode(GPIO_COMBO_I2S_WS_PIN, GPIO_COMBO_I2S_WS_PIN_I2SONLY_MODE);
 			            mt_set_gpio_mode(GPIO_COMBO_I2S_DAT_PIN, GPIO_COMBO_I2S_DAT_PIN_I2SONLY_MODE);
+#endif
 			            WMT_DBG_FUNC("WMT-PLAT:<I2S IF>I2S init (I2S0 system) \n");
 			        break;
 			    case PIN_STA_IN_L:

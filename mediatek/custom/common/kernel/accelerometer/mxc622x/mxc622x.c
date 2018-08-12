@@ -2013,8 +2013,9 @@ static ssize_t store_layout_value(struct device_driver *ddri, char *buf, size_t 
 		 }
 		 
 		 memset(obj, 0, sizeof(struct mxc622x_i2c_data));
-	 
+	 #if 0
 		 obj->hw = get_cust_acc_hw();
+#endif
 		 atomic_set(&obj->layout, obj->hw->direction);
 		 if(err = hwmsen_get_convert(obj->hw->direction, &obj->cvt))
 		 {
@@ -2124,7 +2125,7 @@ static ssize_t store_layout_value(struct device_driver *ddri, char *buf, size_t 
 	 /*----------------------------------------------------------------------------*/
 	 static int mxc622x_probe(struct platform_device *pdev) 
 	 {
-		 struct acc_hw *hw = get_cust_acc_hw();
+		 struct acc_hw *hw = NULL; /*get_cust_acc_hw();*/
 		 GSE_FUN();
 	 
 		 MXC622X_power(hw, 1);
@@ -2139,7 +2140,7 @@ static ssize_t store_layout_value(struct device_driver *ddri, char *buf, size_t 
 	 /*----------------------------------------------------------------------------*/
 	 static int mxc622x_remove(struct platform_device *pdev)
 	 {
-		 struct acc_hw *hw = get_cust_acc_hw();
+		 struct acc_hw *hw = NULL; //get_cust_acc_hw();
 	 
 		 GSE_FUN();    
 		 MXC622X_power(hw, 0);	 
@@ -2160,7 +2161,7 @@ static ssize_t store_layout_value(struct device_driver *ddri, char *buf, size_t 
 	 static int __init mxc622x_init(void)
 	 {
 		 GSE_FUN();
-		 struct acc_hw *hw = get_cust_acc_hw();
+		 struct acc_hw *hw = NULL; //get_cust_acc_hw();
 		 GSE_LOG("%s: i2c_number=%d\n", __func__,hw->i2c_num); 
 		 i2c_register_board_info(hw->i2c_num, &i2c_mxc622x, 1);
 		 if(platform_driver_register(&mxc622x_gsensor_driver))

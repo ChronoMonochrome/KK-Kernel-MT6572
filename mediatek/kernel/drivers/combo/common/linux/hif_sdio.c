@@ -341,7 +341,7 @@ INT32 mtk_wcn_hif_sdio_irq_flag_set (int flag)
 	{
 		atomic_inc(&hif_sdio_irq_enable_flag);
 	}
-
+#if 0
 	if (0 == atomic_read(&hif_sdio_irq_enable_flag))
 	{
 		mtk_wcn_sdio_irq_flag_set(0);
@@ -351,6 +351,7 @@ INT32 mtk_wcn_hif_sdio_irq_flag_set (int flag)
 	{
 		mtk_wcn_sdio_irq_flag_set(1);
 	}
+#endif
 	return 0;
 }
 

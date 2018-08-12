@@ -98,6 +98,8 @@ ifneq ($(CONFIG_MTK_COMBO),)
 		BUILD_COMBO := yes
 	endif
 
+		BUILD_COMBO := yes
+
 	ifeq ($(BUILD_COMBO), yes)
 		obj-y   +=  combo/
 		subdir-ccflags-y += -D MTK_WCN_COMBO_CHIP_SUPPORT

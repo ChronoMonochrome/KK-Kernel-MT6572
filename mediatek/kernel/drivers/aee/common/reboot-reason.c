@@ -103,10 +103,14 @@ void aee_rr_proc_done(struct proc_dir_entry *aed_proc_dir)
 EXPORT_SYMBOL(aee_rr_proc_done);
 
 /* define /sys/bootinfo/powerup_reason */
+#ifdef CONFIG_MTK_AEE_IPANIC
 extern int g_is_panic;
+#endif
+
 static ssize_t powerup_reason_show(struct kobject *kobj,
 				   struct kobj_attribute *attr, char *buf)
 {
+#ifdef CONFIG_MTK_AEE_IPANIC
 		int g_boot_reason=0;
 		char *br_ptr;
 		if ((br_ptr = strstr(saved_command_line, "boot_reason=")) != 0) 
@@ -120,8 +124,9 @@ static ssize_t powerup_reason_show(struct kobject *kobj,
 			return sprintf(buf, "%s\n", boot_reason[g_boot_reason]);	
 		}
 		else
+#endif
 			return 0;
-  
+   
 }
 
 static struct kobj_attribute powerup_reason_attr = __ATTR_RO(powerup_reason);

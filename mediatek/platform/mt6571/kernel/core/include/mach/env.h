@@ -56,5 +56,4 @@ int ENV_Nand_Write(char *env_buf);
 extern int set_env(char *name,char *value);
 extern char *get_env(char *name);
 extern long long data_free_size_th;
-EXPORT_SYMBOL(data_free_size_th);
 #endif

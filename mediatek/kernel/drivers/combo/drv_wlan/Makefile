@@ -15,6 +15,7 @@ $(warning check_mt6628_end)
 $(warning $(SUPPORT_MT6628));
 
 SUPPORT_MT6630 := $(if $(filter $(MTK_WLAN_CHIP), MT6630),yes,no)
+obj-y += empty.o
 
 ifeq ($(SUPPORT_MT6620), yes)
     obj-$(CONFIG_MTK_COMBO_WIFI) += mt6620/

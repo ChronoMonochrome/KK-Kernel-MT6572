@@ -32,6 +32,7 @@ long long data_free_size_th = DATA_FREE_SIZE_TH_DEFAULT;
 #else
 long long data_free_size_th = 0;
 #endif
+EXPORT_SYMBOL(data_free_size_th);
 
 static ssize_t env_proc_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
