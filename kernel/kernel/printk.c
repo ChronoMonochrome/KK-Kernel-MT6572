@@ -82,7 +82,9 @@ inline void mt_disable_uart(void)
 {   
     if(mt_need_uart_console == 0){                                                      
         printk("<< printk console disable >>\n");                                       
-        printk_disable_uart = 1;
+//ganping.li
+        //printk_disable_uart = 1;
+        printk_disable_uart = 0;
     }else{                                                                              
         printk("<< printk console can't be disabled >>\n");                             
     }   
