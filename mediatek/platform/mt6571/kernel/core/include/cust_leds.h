@@ -51,7 +51,12 @@ enum mt65xx_led_pmic
         MT65XX_LED_PMIC_LCD_ISINK_GROUP_END	
 };
 
-typedef int (*cust_brightness_set)(int level);
+//typedef int (*cust_brightness_set)(int level);
+
+typedef int (*cust_brightness_set)(int level, int div);
+typedef int (*cust_set_brightness)(int level);
+
+
 struct PWM_config
 {
 	int clock_source;

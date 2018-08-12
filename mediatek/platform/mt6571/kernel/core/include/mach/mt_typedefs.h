@@ -56,7 +56,7 @@ typedef unsigned short  USHORT;
 typedef signed char     INT8;
 typedef signed short    INT16;
 typedef signed int      INT32;
-typedef unsigned int    DWORD;
+//typedef unsigned int    DWORD;
 typedef void            VOID;
 typedef unsigned char   BYTE;
 typedef float           FLOAT;
@@ -104,15 +104,29 @@ enum {RX, TX, NONE};
 typedef unsigned char  BOOL;
 #endif
 
-typedef enum {
-   KAL_FALSE = 0,
-   KAL_TRUE  = 1,
-} kal_bool;
+#ifndef KAL_FALSE
+#define KAL_FALSE 0
+#endif
 
+#ifndef KAL_TRUE
+#define KAL_TRUE 1
+#endif
+
+#ifndef kal_bool
+#define kal_bool int
+#endif
+
+#if 0
+typedef enum {
+   KAL_FALSE1 = 0,
+   KAL_TRUE1  = 1,
+} kal_bool;
+#endif
 
 // ---------------------------------------------------------------------------
 //  Type Casting
-// ---------------------------------------------------------------------------
+// -
+//--------------------------------------------------------------------------
 
 #define AS_INT32(x)     (*(INT32 *)((void*)x))
 #define AS_INT16(x)     (*(INT16 *)((void*)x))

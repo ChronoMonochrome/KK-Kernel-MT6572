@@ -76,6 +76,18 @@ typedef signed int      kal_int32;
 typedef signed short    kal_int16;
 typedef signed char     kal_int8;
 
+#ifdef KAL_FALSE
+#undef KAL_FALSE
+#endif
+
+#ifdef KAL_TRUE
+#undef KAL_TRUE
+#endif
+
+#ifdef kal_bool
+#undef kal_bool
+#endif
+
 typedef enum {
    KAL_FALSE = 0,
    KAL_TRUE  = 1,

@@ -4,6 +4,8 @@
 
 #include <mach/mt_typedefs.h>
 
+typedef unsigned int    DWORD;
+
 #define MAX_DEVICE      20
 #define MAX_MOD_NAME    32
 

@@ -41,7 +41,8 @@
 #endif
 
 #ifndef MT_GPIO_EXT_MAX
-#error MT_GPIO_EXT_MAX is not defined
+#define MT_GPIO_EXT_MAX 232
+//#error MT_GPIO_EXT_MAX is not defined
 #endif
 
 /***********************/

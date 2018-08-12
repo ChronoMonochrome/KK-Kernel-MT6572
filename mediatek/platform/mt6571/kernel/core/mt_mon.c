@@ -1,412 +1,770 @@
+#include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/debugfs.h>
-#include <linux/kallsyms.h>
-#include <linux/uaccess.h>
-#include <linux/ftrace.h>
-#include <trace/events/mt65xx_mon_trace.h>
-#include <linux/workqueue.h>
-#include <linux/version.h>
+#include <linux/errno.h>
+#include <linux/trace_seq.h>
+#include <linux/ftrace_event.h>
+#include <linux/device.h>
+#include <linux/platform_device.h>
+#include <linux/vmalloc.h>
 
-#include "kernel/trace/trace.h"
+
+#include "asm/hardware/cache-l2x0.h"
+#include "mach/mt_reg_base.h"
+#include "mach/sync_write.h"
+#include "mach/mt_emi_bm.h"
+//#include "mach/mt6573_pll.h"
 #include "mach/mt_mon.h"
+// FIX-ME mark for porting
+//#include "mach/mt_dcm.h"
+#include <../../kernel/kernel/trace/trace.h>
+ 
 
-static struct trace_array *mt65xx_mon_trace;
-static int __read_mostly mt65xx_mon_enabled;
-static int mt65xx_mon_ref;
+#define MON_LOG_BUFF_LEN    (64 * 1024)
+#define DEF_BM_RW_TYPE      (BM_BOTH_READ_WRITE)
 
-static DEFINE_MUTEX(mt65xx_mon_mutex);
-static DEFINE_SPINLOCK(mt65xx_mon_spinlock);
-
-static int mt65xx_mon_stopped = 1;
-
-int timer_initialized; /* default value: 0 */
-
-static MonitorMode monitor_mode = MODE_SCHED_SWITCH;
-static long mon_period_ns = 1000000L;	/* 1ms */
-static unsigned int is_manual_start;
-
-static struct hrtimer timer;
-static struct mtk_monitor *mtk_mon;
+static DECLARE_BITMAP(buf_bitmap, MON_LOG_BUFF_LEN);
 
 
-/************************************************************/
-/* Add work queue here to prevent the deadlock which        */
-/* will occur when we call the mtk_smp_call_function        */
-/* in hrtimer ISR                                           */
-/************************************************************/
-static struct workqueue_struct *queue;
-static struct work_struct work;
+static unsigned int bm_master_evt = BM_MASTER_AP_MCU;
+static unsigned int bm_rw_type_evt = DEF_BM_RW_TYPE;
 
-static void work_handler(struct work_struct *data)
+static MonitorMode register_mode = MODE_FREE;
+static unsigned long mon_period_evt;
+static unsigned int mon_manual_evt;
+
+struct mt_mon_log *mt_mon_log_buff; //this buffer is allocated for MODE_MANUAL_USER & MODE_MANUAL_KERNEL only
+unsigned int mt_mon_log_buff_index;
+unsigned int mt_kernel_ring_buff_index;
+
+struct arm_pmu *p_pmu;
+struct mtk_monitor mtk_mon;
+
+//static DEFINE_SPINLOCK(mtk_monitor_lock);
+
+/*
+ * mt65xx_mon_init: Initialize the monitor.
+ * Return 0.
+ */
+int mt65xx_mon_init(void)
 {
-	trace_mt65xx_mon_periodic(NULL, NULL);
+//    extern void dcm_disable_all(void);
+	
+    BM_Init();
+
+    // disable system DCM
+    // FIX-ME mark for porting
+    //dcm_disable_all();
+
+    return 0;
 }
 
-enum hrtimer_restart timer_isr(struct hrtimer *hrtimer)
+/*
+ * mt65xx_mon_deinit: De-initialize the monitor.
+ * Return 0.
+ */
+int mt65xx_mon_deinit(void)
 {
-	ktime_t kt;
+  //  extern void dcm_enable_all(void);
 
-	if (mt65xx_mon_stopped == 0) {
-		/* trace_mt65xx_mon_periodic(NULL, NULL); */
-		schedule_work(&work);
-		kt = ktime_set(0, mon_period_ns);
-		return hrtimer_forward_now(&timer, kt);
-	}
+    BM_DeInit();
+	
+/*
+    if (mt_mon_log_buff) {
+        vfree(mt_mon_log_buff);
 
-	return HRTIMER_NORESTART;
+        mt_mon_log_buff = 0;
+    }
+*/
+
+    // enable system DCM
+    // FIX-ME mark for porting
+    //dcm_enable_all();
+
+    return 0;
 }
 
-void set_mt65xx_mon_period(long time_ns)
+/*
+ * mt65xx_mon_enable: Enable hardware monitors.
+ * Return 0.
+ */
+int mt65xx_mon_enable(void)
 {
-	mon_period_ns = time_ns;
+	
+	p_pmu->reset();
+
+    // enable & start ARM performance monitors
+    p_pmu->enable();
+	p_pmu->start();
+
+    // stopping EMI monitors will reset all counters
+    BM_Enable(0);
+
+    // start EMI monitor counting
+    BM_Enable(1);
+    
+    return 0;
 }
 
-long get_mt65xx_mon_period(void)
+/*
+ * mt65xx_mon_disable: Disable hardware monitors.
+ * Return 0.
+ */
+int mt65xx_mon_disable(void)
 {
-	return mon_period_ns;
+	
+    // disable ARM performance monitors
+	p_pmu->stop();
+	
+    BM_Pause();
+    
+    return 0;
 }
 
-void set_mt65xx_mon_manual_start(unsigned int start)
+static inline void set_cpumask(unsigned int cpu, unsigned int index, volatile unsigned long *p)
 {
-	if ((start == 0 || start == 1) && (start != is_manual_start)) {
-		if (start == 0)
-			pr_info("set_mt65xx_mon_manual_start: START\n");
-		else
-			pr_info("set_mt65xx_mon_manual_start: STOP\n");
-
-		trace_mt65xx_mon_manual(start);
-		is_manual_start = start;
-	}
+	unsigned long cpumask = 1UL << cpu;
+	unsigned int offset = (index & 3) << 3; // (index % 4) * 8
+	
+	p += (index >> 2);
+	
+	*p |= (cpumask << offset);
 }
 
-unsigned int get_mt65xx_mon_manual_start(void)
+static inline void clear_bitmap(unsigned int bit, volatile unsigned long *p)
 {
-	return is_manual_start;
+/*  
+	unsigned long mask = 1UL << (bit & 31);
+	
+	p += bit >> 5;
+	
+	*p &= ~mask;
+*/
 }
 
-MonitorMode get_mt65xx_mon_mode(void)
+static inline int get_cpumask(unsigned int index, volatile unsigned long *p)
 {
-	return monitor_mode;
+	unsigned int res;
+	unsigned long offset = (index & 3) << 3; // (index % 4) * 8
+	
+	p += (index >> 2);
+	res = *p;
+	res = (res >> offset) & 0x7;
+	
+	return res;
 }
-
-void set_mt65xx_mon_mode(MonitorMode mode)
+/*
+ * mt65xx_mon_log: Get the current log from hardware monitors.
+ * Return a index to the curret log entry in the log buffer.
+ */
+unsigned int mt65xx_mon_log(void* log_buff)
 {
-	ktime_t kt;
+    struct mt_mon_log* mon_buff;
+    struct pmu_data *pmu_data =  & p_pmu->perf_data;
+    unsigned int cpu = raw_smp_processor_id();
+    unsigned int cur = 0;
+	        
+    p_pmu->read_counter();
+	
+	
+	/* In MODE_SCHED_SWITCH, we need to record the current CPU number to get the Context Switch CPU number.
+	 * 
+	 * */
+    if( register_mode == MODE_MANUAL_USER || register_mode == MODE_MANUAL_KERNEL){
+        set_cpumask(cpu,cur,buf_bitmap);
+        cur = mt_mon_log_buff_index++;
+        mon_buff = &mt_mon_log_buff[cur];
+        mt_mon_log_buff_index %= MON_LOG_BUFF_LEN;
+    }else {
+        cur = mt_kernel_ring_buff_index++;
+        mon_buff = (struct mt_mon_log*)log_buff;
+    }
 
-	pr_info("set_mt65xx_mon_mode (mode = %d)\n", (int)mode);
+        if(mon_buff) 
+        {
+            for_each_present_cpu(cpu){
+                mon_buff->cpu_cnt0[cpu] = pmu_data->cnt_val[cpu][0];
+                mon_buff->cpu_cnt1[cpu] = pmu_data->cnt_val[cpu][1];
+                mon_buff->cpu_cnt2[cpu] = pmu_data->cnt_val[cpu][2];
+                mon_buff->cpu_cnt3[cpu] = pmu_data->cnt_val[cpu][3];
+                mon_buff->cpu_cyc[cpu] =  pmu_data->cnt_val[cpu][ARMV7_CYCLE_COUNTER];
+            }
+			
+#if 1
+            mon_buff->BM_BCNT = BM_GetBusCycCount();
+            mon_buff->BM_TACT = BM_GetTransAllCount();
+            mon_buff->BM_TSCT = BM_GetTransCount(1);
+            mon_buff->BM_WACT = BM_GetWordAllCount();
+            mon_buff->BM_WSCT = BM_GetWordCount(1);
+            mon_buff->BM_BACT = BM_GetBandwidthWordCount();
+            mon_buff->BM_BSCT = BM_GetOverheadWordCount();
+            mon_buff->BM_TSCT2 = BM_GetTransCount(2);
+            mon_buff->BM_WSCT2 = BM_GetWordCount(2);
+            mon_buff->BM_TSCT3 = BM_GetTransCount(3);
+            mon_buff->BM_WSCT3 = BM_GetWordCount(3);
+            mon_buff->BM_WSCT4 = BM_GetWordCount(4);
+            mon_buff->BM_TTYPE1 = BM_GetLatencyCycle(1);
+            mon_buff->BM_TTYPE3 = BM_GetLatencyCycle(3);
+            mon_buff->BM_TTYPE4 = BM_GetLatencyCycle(4);
+            mon_buff->BM_TTYPE5 = BM_GetLatencyCycle(5);
+            mon_buff->BM_TTYPE6 = BM_GetLatencyCycle(6);
+            mon_buff->BM_TTYPE7 = BM_GetLatencyCycle(7);
+            
+            mon_buff->BM_TTYPE9 = BM_GetLatencyCycle(9);            
+            mon_buff->BM_TTYPE11 = BM_GetLatencyCycle(11);
+            mon_buff->BM_TTYPE12 = BM_GetLatencyCycle(12);
+            mon_buff->BM_TTYPE13 = BM_GetLatencyCycle(13);
+            mon_buff->BM_TTYPE14 = BM_GetLatencyCycle(14);
+            mon_buff->BM_TTYPE15 = BM_GetLatencyCycle(15);
 
-	mutex_lock(&mt65xx_mon_mutex);
+            mon_buff->MCI_CNT0 = MCI_GetEventCount(0);
+            mon_buff->MCI_CNT1 = MCI_GetEventCount(1);
 
-	if ((mode != MODE_SCHED_SWITCH) && (mode != MODE_PERIODIC) && (mode != MODE_MANUAL_TRACER))
-		return;
+            //mon_buff->BM_TPCT1 = BM_GetTransTypeCount(1); //not used now
+            
 
-	monitor_mode = mode;
-	if ((monitor_mode == MODE_PERIODIC)) {
-		if (timer_initialized == 0) {
-			hrtimer_init(&timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-			timer.function = timer_isr;
-			kt = ktime_set(0, mon_period_ns);
-			hrtimer_start(&timer, kt, HRTIMER_MODE_REL);
-			timer_initialized++;
-		} else {
-			hrtimer_restart(&timer);
-		}
-	} else if ((monitor_mode == MODE_SCHED_SWITCH) || (monitor_mode == MODE_MANUAL_TRACER)) {
-		if (timer_initialized > 0)
-			hrtimer_cancel(&timer);
-	}
-
-	mutex_unlock(&mt65xx_mon_mutex);
-
-}
-
-void
-tracing_mt65xx_mon_function(struct trace_array *tr,
-			    struct task_struct *prev,
-			    struct task_struct *next, unsigned long flags, int pc)
-{
-#if 0
-	struct ftrace_event_call *call = &event_mt65xx_mon;
+            mon_buff->DRAMC_PageHit = DRAMC_GetPageHitCount(DRAMC_ALL);
+            mon_buff->DRAMC_PageMiss = DRAMC_GetPageMissCount(DRAMC_ALL);
+            mon_buff->DRAMC_Interbank = DRAMC_GetInterbankCount(DRAMC_ALL);
+            mon_buff->DRAMC_Idle = DRAMC_GetIdleCount();        
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-	struct ring_buffer *buffer = tr->buffer;
-#else
-	struct ring_buffer *buffer = tr->trace_buffer.buffer;
-#endif
-	struct ring_buffer_event *event;
-	struct mt65xx_mon_entry *entry;
-	unsigned int idx = 0;
+        }
 
-	event = trace_buffer_lock_reserve(buffer, TRACE_MT65XX_MON_TYPE, sizeof(*entry), flags, pc);
-	if (!event)
-		return;
-
-	entry = ring_buffer_event_data(event);
-
-
-
-	mtk_mon->disable();
-	entry->log = idx = mtk_mon->mon_log((void *)&entry->field);
-	entry->cpu = raw_smp_processor_id();
-	mtk_mon->enable();
-
-
-
-#if 0
-	if (!filter_check_discard(call, entry, buffer, event))
-#endif
-		trace_buffer_unlock_commit(buffer, event, flags, pc);
+    memset(pmu_data->cnt_val[0], 0, sizeof(struct pmu_data));
+    return cur;
 }
 
-static void
-probe_mt65xx_mon_tracepoint(void *ignore, struct task_struct *prev, struct task_struct *next)
-{
-	struct trace_array_cpu *data;
-	unsigned long flags;
-	int cpu;
-	int pc;
+extern unsigned int mt_get_emi_freq(void);
 
-	if (unlikely(!mt65xx_mon_ref))
-		return;
+enum print_line_t mt65xx_mon_print_entry(struct mt65xx_mon_entry *entry, struct trace_iterator *iter){
+    struct trace_seq *s = &iter->seq;
+    int cpu = entry->cpu;
+    struct mt_mon_log *log_entry;
+    unsigned int log = 0;    
+    MonitorMode mon_mode_evt = get_mt65xx_mon_mode();
+    
 
-	if (!mt65xx_mon_enabled || mt65xx_mon_stopped)
-		return;
+    if(entry == NULL)
+        return TRACE_TYPE_HANDLED;
+    else{
+        log_entry = &entry->field;
+        log = entry->log;
+    }
 
-	if (prev)
-		tracing_record_cmdline(prev);
-	if (next)
-		tracing_record_cmdline(next);
-	tracing_record_cmdline(current);
+    if (log == 0) {
+        trace_seq_printf(s, "MON_LOG_BUFF_LEN = %d, ", MON_LOG_BUFF_LEN);    
+        trace_seq_printf(s, "EMI_CLOCK = %d, ", mt_get_emi_freq());
+    }
+    
+        if(mon_mode_evt != MODE_SCHED_SWITCH){
+          for_each_present_cpu(cpu)
+          {
+            trace_seq_printf(
+              				s,
+              				" cpu%d_cyc = %d, cpu%d_cnt0 = %d, cpu%d_cnt1 = %d, cpu%d_cnt2 = %d, cpu%d_cnt3 = %d, ",
+              				cpu,
+              				log_entry->cpu_cyc[cpu],
+              				cpu,
+              				log_entry->cpu_cnt0[cpu],
+              				cpu,
+              				log_entry->cpu_cnt1[cpu],
+              				cpu,
+              				log_entry->cpu_cnt2[cpu],
+              				cpu,
+              				log_entry->cpu_cnt3[cpu]);
+          }
+        }
+        else /*SCHED_SWITCH - only print self cpu*/
+        {
+          trace_seq_printf(
+              				s,
+              				" cpu%d_cyc = %d, cpu%d_cnt0 = %d, cpu%d_cnt1 = %d, cpu%d_cnt2 = %d, cpu%d_cnt3 = %d, ",
+              				cpu,
+              				log_entry->cpu_cyc[cpu],
+              				cpu,
+              				log_entry->cpu_cnt0[cpu],
+              				cpu,
+              				log_entry->cpu_cnt1[cpu],
+              				cpu,
+              				log_entry->cpu_cnt2[cpu],
+              				cpu,
+              				log_entry->cpu_cnt3[cpu]);
+        }
 
-	pc = preempt_count();
-	/* local_irq_save(flags); */
-	spin_lock_irqsave(&mt65xx_mon_spinlock, flags);
-	cpu = raw_smp_processor_id();
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-	data = mt65xx_mon_trace->data[cpu];
-#else
-	data = per_cpu_ptr(mt65xx_mon_trace->trace_buffer.data, cpu);
-#endif
+        trace_seq_printf(
+            s,
+            "BM_BCNT = %d, BM_TACT = %d, BM_TSCT = %d, ",
+            log_entry->BM_BCNT,
+            log_entry->BM_TACT,
+            log_entry->BM_TSCT);
 
-	if (likely(!atomic_read(&data->disabled)))
-		tracing_mt65xx_mon_function(mt65xx_mon_trace, prev, next, flags, pc);
-	spin_unlock_irqrestore(&mt65xx_mon_spinlock, flags);
-	/* local_irq_restore(flags); */
+        trace_seq_printf(
+            s,
+            "BM_WACT = %d, BM_WSCT0 = %d, BM_BACT = %d, ",
+            log_entry->BM_WACT,
+            log_entry->BM_WSCT,
+            log_entry->BM_BACT);
+
+        trace_seq_printf(
+            s,
+            "BM_BSCT = %d, ",
+            log_entry->BM_BSCT);
+
+        trace_seq_printf(
+            s,
+            "BM_TSCT2 = %d, BM_WSCT2 = %d, ",
+            log_entry->BM_TSCT2,
+            log_entry->BM_WSCT2);
+
+        trace_seq_printf(
+            s,
+            "BM_TSCT3 = %d, BM_WSCT3 = %d, ",
+            log_entry->BM_TSCT3,
+            log_entry->BM_WSCT3);
+
+        trace_seq_printf(
+            s,
+            "BM_WSCT4 = %d, BM_TPCT1 = %d, ",
+            log_entry->BM_WSCT4,
+            log_entry->BM_TPCT1);
+            
+        trace_seq_printf(
+            s,
+            "BM_TTYPE01 = %d, BM_TTYPE09 = %d, ",
+            log_entry->BM_TTYPE1, log_entry->BM_TTYPE9);
+        
+        trace_seq_printf(
+            s,
+            "BM_TTYPE03 = %d, BM_TTYPE11 = %d, ",
+            log_entry->BM_TTYPE3, log_entry->BM_TTYPE11);    
+        
+        trace_seq_printf(
+            s,
+            "BM_TTYPE04 = %d, BM_TTYPE12 = %d, ",
+            log_entry->BM_TTYPE4, log_entry->BM_TTYPE12);    
+        
+        trace_seq_printf(
+            s,
+            "BM_TTYPE05 = %d, BM_TTYPE13 = %d, ",
+            log_entry->BM_TTYPE5, log_entry->BM_TTYPE13);    
+
+        trace_seq_printf(
+            s,
+            "BM_TTYPE06 = %d, BM_TTYPE14 = %d, ",
+            log_entry->BM_TTYPE6, log_entry->BM_TTYPE14);            
+
+        trace_seq_printf(
+            s,
+            "BM_TTYPE07 = %d, BM_TTYPE15 = %d, ",
+            log_entry->BM_TTYPE7, log_entry->BM_TTYPE15);    
+
+        trace_seq_printf(
+            s,
+            "DRAMC_PageHit = %d, DRAMC_PageMiss = %d, DRAMC_Interbank = %d, DRAMC_Idle = %d, ",
+            log_entry->DRAMC_PageHit,
+            log_entry->DRAMC_PageMiss,
+            log_entry->DRAMC_Interbank,
+            log_entry->DRAMC_Idle);                   
+            
+        trace_seq_printf(
+            s,
+            "MCI_CNT0 = %d, MCI_CNT1 = %d\n",
+            log_entry->MCI_CNT0, log_entry->MCI_CNT1);    
+
+    return 0;
 }
 
-void tracing_mt65xx_mon_manual_stop(struct trace_array *tr, unsigned long flags, int pc)
+void mt65xx_mon_set_pmu(struct pmu_cfg *p_cfg)
 {
-#if 0
-	struct ftrace_event_call *call = &event_mt65xx_mon;
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-	struct ring_buffer *buffer = tr->buffer;
-#else
-	struct ring_buffer *buffer = tr->trace_buffer.buffer;
-#endif
-	struct ring_buffer_event *event;
-	struct mt65xx_mon_entry *entry;
-	unsigned int idx = 0;
-
-	event = trace_buffer_lock_reserve(buffer, TRACE_MT65XX_MON_TYPE, sizeof(*entry), flags, pc);
-	if (!event)
-		return;
-
-	entry = ring_buffer_event_data(event);
-
-
-	mtk_mon->disable();
-
-	entry->log = idx = mtk_mon->mon_log((void *)&entry->field);
-	entry->cpu = raw_smp_processor_id();
-#if 0
-	if (!filter_check_discard(call, entry, buffer, event))
-#endif
-		trace_buffer_unlock_commit(buffer, event, flags, pc);
+	memcpy(&p_pmu->perf_cfg, p_cfg, sizeof(struct pmu_cfg));
 }
 
-static void probe_mt65xx_mon_manual_tracepoint(void *ignore, unsigned int manual_start)
+void mt65xx_mon_get_pmu(struct pmu_cfg *p_cfg)
 {
-	struct trace_array_cpu *data;
-	unsigned long flags;
-	int cpu;
-	int pc;
+	memcpy(p_cfg, &p_pmu->perf_cfg, sizeof(struct pmu_cfg));
+}
 
-	if (unlikely(!mt65xx_mon_ref))
-		return;
+void mt65xx_mon_set_l2c(struct l2c_cfg *l_cfg)
+{
+}
 
-	if (!mt65xx_mon_enabled || mt65xx_mon_stopped)
-		return;
+void mt65xx_mon_get_l2c(struct l2c_cfg *l_cfg)
+{
+}
 
-	if ((manual_start != 0) && (manual_start != 1))
-		return;
-
-	tracing_record_cmdline(current);
-
-	if (manual_start == is_manual_start)/* if already started or stopped */
-		return;
-
-	if (manual_start == 1) {
-		/* for START operation, only enable mt65xx monitor */
-		mtk_mon->enable();
-		return;
+void mt65xx_mon_set_bm_rw(int type)
+{
+	
+	if(type > BM_WRITE_ONLY) {
+		printk("invalid event\n");
 	} else {
-		/* for STOP operation. log monitor data into buffer */
-		pc = preempt_count();
-		local_irq_save(flags);
-		cpu = raw_smp_processor_id();
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-		data = mt65xx_mon_trace->data[cpu];
-#else
-		data = per_cpu_ptr(mt65xx_mon_trace->trace_buffer.data, cpu);
-#endif
-		if (likely(!atomic_read(&data->disabled)))
-			tracing_mt65xx_mon_manual_stop(mt65xx_mon_trace, flags, pc);
-		local_irq_restore(flags);
+		BM_SetReadWriteType(type);
 	}
+   
 }
 
-static int tracing_mt65xx_mon_register(void)
+static ssize_t bm_master_evt_show(struct device_driver *driver, char *buf)
 {
-	int ret;
-
-	ret = register_trace_mt65xx_mon_sched_switch(probe_mt65xx_mon_tracepoint, NULL);
-	if (ret)
-		pr_info("sched trace: Couldn't activate tracepoint probe to mt65xx monitor\n");
-
-	ret = register_trace_mt65xx_mon_periodic(probe_mt65xx_mon_tracepoint, NULL);
-	if (ret)
-		pr_info("periodic trace: Couldn't activate tracepoint probe to mt65xx monitor\n");
-
-	ret = register_trace_mt65xx_mon_manual(probe_mt65xx_mon_manual_tracepoint, NULL);
-	if (ret)
-		pr_info("manual trace: Couldn't activate tracepoint probe to mt65xx monitor\n");
-
-	return ret;
+    return snprintf(buf, PAGE_SIZE, "EMI bus monitor master = %d\n", bm_master_evt);
 }
 
-static void tracing_mt65xx_mon_unregister(void)
+ssize_t bm_master_evt_store(struct device_driver *driver, const char *buf, size_t count)
 {
-	unregister_trace_mt65xx_mon_sched_switch(probe_mt65xx_mon_tracepoint, NULL);
+    if (!strncmp(buf, "APMCU", strlen("APMCU"))) {
+        bm_master_evt = BM_MASTER_AP_MCU;
+    }else if (!strncmp(buf, "CONNSYS", strlen("CONNSYS"))) {
+        bm_master_evt = BM_MASTER_CONN_SYS;
+    }else if (!strncmp(buf, "MMSYS", strlen("MMSYS"))) {
+        bm_master_evt = BM_MASTER_MMSYS;
+    }else if (!strncmp(buf, "MDMCU", strlen("MDMCU"))) {
+        bm_master_evt = BM_MASTER_MD_MCU;
+    }else if (!strncmp(buf, "MDHW", strlen("MDHW"))) {
+        bm_master_evt = BM_MASTER_MD_HW;
+    }else if (!strncmp(buf, "MD_ALL", strlen("MD_ALL"))) {
+        bm_master_evt = BM_MASTER_MD_MCU | BM_MASTER_MD_HW;   
+    }else if (!strncmp(buf, "PERI", strlen("PERI"))) {
+        bm_master_evt = BM_MASTER_PERI;
+    }else if (!strncmp(buf, "ALL", strlen("ALL"))) {
+        bm_master_evt = BM_MASTER_ALL;    
+    }else {
+        printk("invalid event\n");
 
-	unregister_trace_mt65xx_mon_periodic(probe_mt65xx_mon_tracepoint, NULL);
+        return count;
+    }
 
-	unregister_trace_mt65xx_mon_manual(probe_mt65xx_mon_manual_tracepoint, NULL);
+    BM_SetMaster(1, bm_master_evt);
+
+    return count;
 }
 
-static void tracing_start_mt65xx_mon(void)
+static ssize_t bm_rw_type_evt_show(struct device_driver *driver, char *buf)
 {
-	mutex_lock(&mt65xx_mon_mutex);
-	if (!(mt65xx_mon_ref++))
-		tracing_mt65xx_mon_register();
-	mutex_unlock(&mt65xx_mon_mutex);
+    return snprintf(buf, PAGE_SIZE, "EMI bus read write type = %d\n", bm_rw_type_evt);
 }
 
-static void tracing_stop_mt65xx_mon(void)
+ssize_t bm_rw_type_evt_store(struct device_driver *driver, const char *buf, size_t count)
 {
-	mutex_lock(&mt65xx_mon_mutex);
-	if (!(--mt65xx_mon_ref))
-		tracing_mt65xx_mon_unregister();
-	mutex_unlock(&mt65xx_mon_mutex);
+    if (!strncmp(buf, "RW", strlen("RW"))) {
+        bm_rw_type_evt = BM_BOTH_READ_WRITE;
+    } else if (!strncmp(buf, "RO", strlen("RO"))) {
+        bm_rw_type_evt = BM_READ_ONLY;
+    } else if (!strncmp(buf, "WO", strlen("WO"))) {
+        bm_rw_type_evt = BM_WRITE_ONLY;
+    } else {
+        printk("invalid event\n");
+        return count;
+    }
+
+    BM_SetReadWriteType(bm_rw_type_evt);
+
+    return count;
 }
 
-void tracing_start_mt65xx_mon_record(void)
+static ssize_t mon_mode_evt_show(struct device_driver *driver, char *buf)
 {
-	if (unlikely(!mt65xx_mon_trace)) {
-		WARN_ON(1);
-		return;
+    MonitorMode mon_mode_evt;
+    mon_mode_evt = get_mt65xx_mon_mode();
+	if(mon_mode_evt == MODE_MANUAL_USER)
+        return snprintf(buf, PAGE_SIZE, "Monitor mode = MANUAL_USER\n");
+    else if(mon_mode_evt == MODE_SCHED_SWITCH)
+        return snprintf(buf, PAGE_SIZE, "Monitor mode = SCHED_SWITCH\n");
+    else if(mon_mode_evt == MODE_PERIODIC)
+        return snprintf(buf, PAGE_SIZE, "Monitor mode = PERIODIC\n");
+    else if(mon_mode_evt == MODE_MANUAL_TRACER)
+        return snprintf(buf, PAGE_SIZE, "Monitor mode = MANUAL_TRACER\n");  
+    else if(mon_mode_evt == MODE_MANUAL_KERNEL)
+        return snprintf(buf, PAGE_SIZE, "Monitor mode = MANUAL_KERNEL\n");
+    else if(mon_mode_evt == MODE_FREE)          
+    	return snprintf(buf, PAGE_SIZE, "Monitor mode = FREE\n");
+    else
+    	return snprintf(buf, PAGE_SIZE, "Monitor mode = Unknown\n");
+}
+
+ssize_t mon_mode_evt_store(struct device_driver *driver, const char *buf, size_t count)
+{
+	MonitorMode mon_mode_evt;
+	if (!strncmp(buf, "SCHED_SWITCH", strlen("SCHED_SWITCH"))) {
+        mon_mode_evt = MODE_SCHED_SWITCH;
+    } else if (!strncmp(buf, "PERIODIC", strlen("PERIODIC"))) {
+        mon_mode_evt = MODE_PERIODIC;
+    } else if (!strncmp(buf, "MANUAL_TRACER", strlen("MANUAL_TRACER"))) {
+        mon_mode_evt = MODE_MANUAL_TRACER;
+    } else {
+        printk("invalid event\n");
+        return count;
+    }
+    
+    set_mt65xx_mon_mode(mon_mode_evt);
+    
+    return count;
+}
+
+static ssize_t mon_period_evt_show(struct device_driver *driver, char *buf)
+{
+    return snprintf(buf, PAGE_SIZE, "Monitor period = %ld (for periodic mode)\n", get_mt65xx_mon_period());    
+}
+
+ssize_t mon_period_evt_store(struct device_driver *driver, const char *buf, size_t count)
+{
+    
+    sscanf(buf, "%ld", &mon_period_evt);    
+    set_mt65xx_mon_period(mon_period_evt);
+    
+    return count;
+}
+
+static ssize_t mon_manual_evt_show(struct device_driver *driver, char *buf)
+{
+    mon_manual_evt = get_mt65xx_mon_manual_start();
+    if(mon_manual_evt == 1)
+        return snprintf(buf, PAGE_SIZE, "Manual Monitor is Started (for manual mode)\n");
+    else if(mon_manual_evt == 0)
+        return snprintf(buf, PAGE_SIZE, "Manual Monitor is Stopped (for manual mode)\n");
+    else
+        return 0;
+}
+
+ssize_t mon_manual_evt_store(struct device_driver *driver, const char *buf, size_t count)
+{
+    
+    if (!strncmp(buf, "START", strlen("START"))) {
+        mon_manual_evt = 1;
+    } else if (!strncmp(buf, "STOP", strlen("STOP"))) {
+        mon_manual_evt = 0;
+    } else {
+        printk("invalid event\n");
+        return count;
+    }
+    
+    set_mt65xx_mon_manual_start(mon_manual_evt);
+    
+    return count;
+}
+
+static ssize_t cpu_pmu_evt_show(struct device_driver *driver, char *buf)   
+{   
+
+	u32 j;
+	int size = 0;
+	
+	if(p_pmu == NULL) {
+		printk("PMU user interface isn't ready now!\n"); 
+		return 0;
+	}	
+	
+	for(j = 0; j < NUMBER_OF_EVENT; j++) {
+		size += sprintf(buf + size, "Evt%d = 0x%x\t", j, p_pmu->perf_cfg.event_cfg[j]);	
 	}
+	size += sprintf(buf + size, "\n");
+	
+    return (size); 
+}
+ 
+ssize_t cpu_pmu_evt_store(struct device_driver *driver, const char *buf, size_t count) 
+{   
+    	
+    char *p = (char *)buf;    
+	char *token[8];
+	char *ptr;
+	int i = 0;
+	
+	if((strlen(buf)+1) > 128)
+    {
+      printk("PMU: command overflow!");
+      return -1;
+    }
+    
+	do{
+        ptr = strsep (&p, " ");
+        token[i] = ptr;
+        i++;
+    }while(ptr != NULL);
 
-	tracing_start_mt65xx_mon();
+    //because we use i to count num of evt setting, i is NUMBER_OF_EVENT+1
+    if(i != (NUMBER_OF_EVENT+1)){
+        printk("[PMU]The number of parameter is wrong!!! Please echo ");
+        for(i = 0; i < NUMBER_OF_EVENT; i++)
+            printk("Evt%d ",i);
+        printk("> cpu_pmu_cfg\n");
+        return -1;
+    }
+	
+    
+	for(i = 0; i < NUMBER_OF_EVENT; i++) 
+		p_pmu->perf_cfg.event_cfg[i] =  simple_strtoul(token[i], &token[i], 16);
+	
+	
+	for(i=0; i<NUMBER_OF_EVENT; i++)
+		printk("%x  ",p_pmu->perf_cfg.event_cfg[i]);
+	printk("\n");
+	p_pmu->enable();
 
-	mutex_lock(&mt65xx_mon_mutex);
-	mt65xx_mon_enabled++;
-	mutex_unlock(&mt65xx_mon_mutex);
+    return count;   
 }
 
 
-static int mt65xx_mon_trace_init(struct trace_array *tr)
+static ssize_t mci_evt_show(struct device_driver *driver, char *buf)
 {
-
-	mt65xx_mon_trace = tr;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-	tracing_reset_online_cpus(tr);
-#else
-	tracing_reset_online_cpus(&tr->trace_buffer);
-#endif
-	tracing_start_mt65xx_mon_record();
-
-	return 0;
+  MCI_Event_Read();
+  return 0;
 }
 
-static void mt65xx_mon_trace_reset(struct trace_array *tr)
+ssize_t mci_evt_store(struct device_driver *driver, const char *buf, size_t count) 
 {
-	if (mt65xx_mon_ref) {
-		mutex_lock(&mt65xx_mon_mutex);
-		mt65xx_mon_enabled--;
-		WARN_ON(mt65xx_mon_enabled < 0);
-		mutex_unlock(&mt65xx_mon_mutex);
+  unsigned int evt0, evt1;
+  if (sscanf(buf, "%x %x", &evt0, &evt1) != 2)
+		return -EINVAL;
+  MCI_Event_Set(evt0, evt1); 
 
-		tracing_stop_mt65xx_mon();
-	}
+  return count;
 }
 
-static void mt65xx_mon_trace_start(struct trace_array *tr)
+
+DRIVER_ATTR(bm_master_evt, 0644, bm_master_evt_show, bm_master_evt_store);
+DRIVER_ATTR(bm_rw_type_evt, 0644, bm_rw_type_evt_show, bm_rw_type_evt_store);
+
+DRIVER_ATTR(mon_mode_evt, 0644, mon_mode_evt_show, mon_mode_evt_store);
+DRIVER_ATTR(mon_period_evt, 0644, mon_period_evt_show, mon_period_evt_store);
+DRIVER_ATTR(mon_manual_evt, 0644, mon_manual_evt_show, mon_manual_evt_store);
+
+DRIVER_ATTR(cpu_pmu_cfg,	0644, cpu_pmu_evt_show,		cpu_pmu_evt_store);
+
+DRIVER_ATTR(mci_evt, 0644, mci_evt_show, mci_evt_store);
+
+
+static struct device_driver mt_mon_drv = 
 {
-	ktime_t kt;
-
-	int ret;
-	ret = register_monitor(&mtk_mon, monitor_mode);
-
-	if (ret != 0) {
-		pr_info("MTK Monitor Register Fail\n");
-		return;
-	}
-	pr_info("MTK Monitor Register OK\n");
-	mtk_mon->init();
-
-	mt65xx_mon_stopped = 0;
-	if ((monitor_mode == MODE_PERIODIC) && (timer_initialized > 0)) {
-		kt = ktime_set(0, mon_period_ns);
-		hrtimer_restart(&timer);
-	}
-	mtk_mon->enable();
-}
-
-static void mt65xx_mon_trace_stop(struct trace_array *tr)
-{
-	mt65xx_mon_stopped = 1;
-
-	if ((monitor_mode == MODE_PERIODIC) && (timer_initialized > 0))
-		hrtimer_cancel(&timer);
-
-	if (mtk_mon == NULL) {
-		pr_info("MTK Monitor doesnt register!!!\n");
-		return;
-	}
-	mtk_mon->deinit();
-	unregister_monitor(&mtk_mon);
-}
-
-static struct tracer mt65xx_mon_tracer __read_mostly = {
-	.name = "mt65xx monitor",
-	.init = mt65xx_mon_trace_init,
-	.reset = mt65xx_mon_trace_reset,
-	.start = mt65xx_mon_trace_start,
-	.stop = mt65xx_mon_trace_stop,
-	.wait_pipe = poll_wait_pipe,
-#ifdef CONFIG_FTRACE_SELFTEST
-	.selftest = trace_selftest_startup_mtk,
-#endif
+    .name = "mt_monitor",
+    .bus = &platform_bus_type,
+    .owner = THIS_MODULE,
 };
 
-static int init_mt65xx_mon_trace(void)
+
+struct mtk_monitor mtk_mon = {
+        .init			= mt65xx_mon_init,
+        .deinit			= mt65xx_mon_deinit,
+        .enable			= mt65xx_mon_enable,
+        .disable		= mt65xx_mon_disable,
+        .mon_log		= mt65xx_mon_log,
+        .set_pmu		= mt65xx_mon_set_pmu,
+        .get_pmu		= mt65xx_mon_get_pmu,
+        .set_l2c		= mt65xx_mon_set_l2c,
+        .get_l2c		= mt65xx_mon_get_l2c,
+		.set_bm_rw		= mt65xx_mon_set_bm_rw,
+};
+
+/*
+ * mt_mon_mod_init: module init function
+ */
+static int __init mt_mon_mod_init(void)
 {
-	queue = create_singlethread_workqueue("trace mon");
-	if (!queue)
-		pr_info("create monitor work queue error\n");
-	INIT_WORK(&work, work_handler);
-	return register_tracer(&mt65xx_mon_tracer);
+    int ret;
+	
+    /* register driver and create sysfs files */
+    ret = driver_register(&mt_mon_drv);
+
+    if (ret) {
+        printk("fail to register mt_mon_drv\n");
+        return ret;
+    }
+    ret = driver_create_file(&mt_mon_drv, &driver_attr_bm_master_evt);
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_bm_rw_type_evt);
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_mon_mode_evt);
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_mon_period_evt);    
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_mon_manual_evt);
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_cpu_pmu_cfg);
+    ret |= driver_create_file(&mt_mon_drv, &driver_attr_mci_evt);
+
+    if (ret) {
+        printk("fail to create mt_mon sysfs files\n");
+
+        return ret;
+    }
+
+    /* SPNIDEN[12] must be 1 for using ARM11 performance monitor unit */
+//    *(volatile unsigned int *)0xF702A000 |= 0x1000;
+
+
+	ret = register_pmu(&p_pmu);
+	if(ret != 0 || p_pmu == NULL) {
+		printk("Register PMU Fail\n");
+		return ret;
+	}
+	
+
+    /* init EMI bus monitor */
+    BM_SetReadWriteType(DEF_BM_RW_TYPE);
+    BM_SetMonitorCounter(1, BM_MASTER_MMSYS, BM_TRANS_TYPE_4BEAT | BM_TRANS_TYPE_8Byte | BM_TRANS_TYPE_BURST_WRAP);
+    BM_SetMonitorCounter(2, BM_MASTER_AP_MCU, BM_TRANS_TYPE_4BEAT | BM_TRANS_TYPE_8Byte | BM_TRANS_TYPE_BURST_WRAP);
+    BM_SetMonitorCounter(3, BM_MASTER_MD_MCU | BM_MASTER_MD_HW , BM_TRANS_TYPE_4BEAT | BM_TRANS_TYPE_8Byte | BM_TRANS_TYPE_BURST_WRAP);
+    BM_SetMonitorCounter(4, BM_MASTER_PERI, BM_TRANS_TYPE_4BEAT | BM_TRANS_TYPE_8Byte | BM_TRANS_TYPE_BURST_WRAP);
+    
+    BM_SetLatencyCounter();
+
+    return 0;
 }
-device_initcall(init_mt65xx_mon_trace);
+
+arch_initcall (mt_mon_mod_init);
+
+static DEFINE_SPINLOCK(reg_mon_lock);
+int register_monitor(struct mtk_monitor **p_mon, MonitorMode mode)
+{
+	int ret = 0;
+	
+	spin_lock(&reg_mon_lock);
+	
+  mt_kernel_ring_buff_index = 0;
+  mt_mon_log_buff_index = 0;
+	
+	if(register_mode != MODE_FREE) {
+        goto _err;
+    } else {
+		register_mode = mode;
+		*p_mon = &mtk_mon;
+	}	
+	
+    if(mode == MODE_MANUAL_USER || mode == MODE_MANUAL_KERNEL) {
+        if (!mt_mon_log_buff) {
+            mt_mon_log_buff = vmalloc(sizeof(struct mt_mon_log) * MON_LOG_BUFF_LEN);        
+            if (!mt_mon_log_buff) {
+                printk(KERN_WARNING "fail to allocate the buffer for the monitor log\n");
+                register_mode = MODE_FREE;
+                goto _err;
+            }
+            mtk_mon.log_buff = mt_mon_log_buff;
+        }    
+    }    
+
+	if(mode == MODE_SCHED_SWITCH)
+		p_pmu->multicore = 0;
+	else 
+		p_pmu->multicore = 1;
+		
+	spin_unlock(&reg_mon_lock);
+	
+	return ret;
+
+_err:
+    p_mon = NULL;
+    spin_unlock(&reg_mon_lock);
+    return -1;    
+}   
+EXPORT_SYMBOL(register_monitor);
+
+void unregister_monitor(struct mtk_monitor **p_mon)
+{
+	
+	spin_lock(&reg_mon_lock);
+	
+    if(mt_mon_log_buff) {
+        vfree(mt_mon_log_buff);
+        mt_mon_log_buff = NULL;
+    }
+    
+	register_mode = MODE_FREE;
+	*p_mon = NULL;
+
+    mt_kernel_ring_buff_index = 0;
+    mt_mon_log_buff_index = 0;
+	spin_unlock(&reg_mon_lock);
+}
+EXPORT_SYMBOL(unregister_monitor);

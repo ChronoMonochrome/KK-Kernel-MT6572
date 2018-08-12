@@ -15,6 +15,7 @@
 #include <mach/mt_gpio.h>
 #include <mach/mt_gpio_core.h>
 
+#define MT_GPIO_MAX_PIN 232
 /*----------------------------------------------------------------------------*/
 typedef struct {        /*FIXME: check GPIO spec*/
     unsigned int no     : 16;

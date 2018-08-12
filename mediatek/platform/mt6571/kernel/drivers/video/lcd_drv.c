@@ -15,6 +15,8 @@
 
 #include <linux/hrtimer.h>
 
+typedef unsigned int    DWORD;
+
 #if ENABLE_LCD_INTERRUPT
 //#include <linux/sched.h>
 #include <linux/interrupt.h>
