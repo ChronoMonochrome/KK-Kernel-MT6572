@@ -49,7 +49,7 @@ int kdCISModulePowerOn(CAMERA_DUAL_CAMERA_SENSOR_ENUM SensorIdx, char *currSenso
 #define IDX_PS_ON   2
 #define IDX_PS_OFF  3  
   
-    u32 pinSet[2][8] = {
+    u32 pinSet[1][8] = {
                   //for main sensor
                   {GPIO_CAMERA_CMRST_PIN,
                       GPIO_CAMERA_CMRST_PIN_M_GPIO,   /* mode */
@@ -59,7 +59,9 @@ int kdCISModulePowerOn(CAMERA_DUAL_CAMERA_SENSOR_ENUM SensorIdx, char *currSenso
                       GPIO_CAMERA_CMPDN_PIN_M_GPIO,
                       GPIO_OUT_ONE,
                       GPIO_OUT_ZERO,
-                  },
+                  }
+#if 0
+                  ,
                   //for sub sensor
                   {GPIO_CAMERA_2_CMRST_PIN,
                       GPIO_CAMERA_2_CMRST_PIN_M_GPIO,
@@ -70,15 +72,17 @@ int kdCISModulePowerOn(CAMERA_DUAL_CAMERA_SENSOR_ENUM SensorIdx, char *currSenso
                       GPIO_OUT_ONE,
                       GPIO_OUT_ZERO,
                   }
+#endif
                  };
 
+#if 0
     if (DUAL_CAMERA_MAIN_SENSOR == SensorIdx){
         pinSetIdx = 0;
     }
     else if (DUAL_CAMERA_SUB_SENSOR == SensorIdx) {
         pinSetIdx = 1;
     }
-
+#endif
     //power ON
     if (On) {
 

@@ -42,13 +42,9 @@ int getDefaultStrobeNVRam_main(void* data, int* ret_size)
 	NVRAM_CAMERA_STROBE_STRUCT* p;
 	p = (NVRAM_CAMERA_STROBE_STRUCT*)data;
 
-
-
-
-
 	static short engTab[]=
     {
-        3705,16310,600,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,1,
+        100,200,600,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,1,
 		1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,2,
 		1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,3,
 		1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,4,
@@ -69,41 +65,41 @@ int getDefaultStrobeNVRam_main(void* data, int* ret_size)
 	//tuning para
 	p->tuningPara[0].yTar = 188;
 	p->tuningPara[0].antiIsoLevel = -5;
-	p->tuningPara[0].antiExpLevel = -8;
+	p->tuningPara[0].antiExpLevel = -5;
 	p->tuningPara[0].antiStrobeLevel = -10;
-	p->tuningPara[0].antiUnderLevel = 0;
+	p->tuningPara[0].antiUnderLevel = -2;
 	p->tuningPara[0].antiOverLevel = 3;
-	p->tuningPara[0].foregroundLevel = 3;
+	p->tuningPara[0].foregroundLevel = 1;
 	p->tuningPara[0].isRefAfDistance = 0;
 	p->tuningPara[0].accuracyLevel = 10;
 
 	p->tuningPara[1].yTar = 188;
 	p->tuningPara[1].antiIsoLevel = -5;
-	p->tuningPara[1].antiExpLevel = -8;
+	p->tuningPara[1].antiExpLevel = -5;
 	p->tuningPara[1].antiStrobeLevel = -10;
-	p->tuningPara[1].antiUnderLevel = 0;
+	p->tuningPara[1].antiUnderLevel = -2;
 	p->tuningPara[1].antiOverLevel = 3;
-	p->tuningPara[1].foregroundLevel = 3;
+	p->tuningPara[1].foregroundLevel = 1;
 	p->tuningPara[1].isRefAfDistance = 0;
 	p->tuningPara[1].accuracyLevel = 10;
 
 	p->tuningPara[2].yTar = 188;
 	p->tuningPara[2].antiIsoLevel = -5;
-	p->tuningPara[2].antiExpLevel = -8;
+	p->tuningPara[2].antiExpLevel = -5;
 	p->tuningPara[2].antiStrobeLevel = -10;
-	p->tuningPara[2].antiUnderLevel = 0;
+	p->tuningPara[2].antiUnderLevel = -2;
 	p->tuningPara[2].antiOverLevel = 3;
-	p->tuningPara[2].foregroundLevel = 3;
+	p->tuningPara[2].foregroundLevel = 1;
 	p->tuningPara[2].isRefAfDistance = 0;
 	p->tuningPara[2].accuracyLevel = 10;
 
 	p->tuningPara[3].yTar = 188;
 	p->tuningPara[3].antiIsoLevel = -5;
-	p->tuningPara[3].antiExpLevel = -8;
+	p->tuningPara[3].antiExpLevel = -5;
 	p->tuningPara[3].antiStrobeLevel = -10;
-	p->tuningPara[3].antiUnderLevel = 0;
+	p->tuningPara[3].antiUnderLevel = -2;
 	p->tuningPara[3].antiOverLevel = 3;
-	p->tuningPara[3].foregroundLevel = 3;
+	p->tuningPara[3].foregroundLevel = 1;
 	p->tuningPara[3].isRefAfDistance = 0;
 	p->tuningPara[3].accuracyLevel = 10;
 	//is eng level used (or by firmware)

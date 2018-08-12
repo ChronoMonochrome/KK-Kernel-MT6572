@@ -109,7 +109,7 @@ unsigned int Cust_SetBacklight(int level, int div)
  *	 3: 156 MHz
  *Div: 0~1023
  *
- *By default, clock_source = 0 and div = 0 => PWM freq. = 26 KHz  
+ *By default, clock_source = 0 and div = 0 => PWM freq. = 26 KHz 
  *-------------------------------------------------------------------------------------------
  */
 

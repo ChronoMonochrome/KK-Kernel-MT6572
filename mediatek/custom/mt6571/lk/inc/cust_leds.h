@@ -12,7 +12,7 @@ enum mt65xx_led_type
 	MT65XX_LED_TYPE_LCD,
 	MT65XX_LED_TYPE_TOTAL,
 };
-
+// New
 enum mt65xx_led_mode
 {
 	MT65XX_LED_MODE_NONE,

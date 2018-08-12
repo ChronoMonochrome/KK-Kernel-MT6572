@@ -56,28 +56,28 @@ const NVRAM_CAMERA_ISP_PARAM_STRUCT CAMERA_ISP_DEFAULT_VALUE =
         }
     }},
     ISPCcmPoly22:{
-        75170, // i4R_AVG
-        13190, // i4R_STD
-        79140, // i4B_AVG
-        26270, // i4B_STD
-        { // i4P00[9]
-            4448648, -1494813, -393843, -604477, 3414513, -250036,  85095, -1385454, 3860283 
+        66900,    // i4R_AVG
+        9404,    // i4R_STD
+        76150,    // i4B_AVG
+        14830,    // i4B_STD
+        {  // i4P00[9]
+            4325000, -890000, -870000, -1032500, 4030000, -430000, -162500, -2662500, 5392500
         },
-        { // i4P10[9]
-            933698,  -628943, -304758, -247520,  -22220,  269740, -73861,   196166, -122555
+        {  // i4P10[9]
+            1089465, -1312576, 229777, 134170, -303888, 177702, 87663, 172592, -252891
         },
-        { // i4P01[9]
-            814367,  -494023, -320352, -358410, -180556,  538966, -57406,  -190454,  247689
+        {  // i4P01[9]
+            514500, -697814, 185076, -102170, -235752, 335593, -70065, -345098, 425991
         },
-        { // i4P20[9]
-            394007,  -491950,   98031,  -21525,   59812,  -38287, 140879,  -521951,  381045
+        {  // i4P20[9]
+            0, 0, 0, 0, 0, 0, 0, 0, 0
         },
-        { // i4P11[9]
-            -35750,  -344806,  380738,  121574,   59500, -181074, 143388,  -309535,  166309
+        {  // i4P11[9]
+            0, 0, 0, 0, 0, 0, 0, 0, 0
         },
-        { // i4P02[9]
-            -315751,    65233,  250618,  151463,   34149, -185612,  21808,    -8637,  -12997
-        }        
+        {  // i4P02[9]
+            0, 0, 0, 0, 0, 0, 0, 0, 0
+        }
     }
 }};
 
@@ -344,29 +344,29 @@ const NVRAM_CAMERA_3A_STRUCT CAMERA_3A_NVRAM_DEFAULT_VALUE =
 		},						
 		// Tungsten						
 		{						
-			-364,	// i4RightBound				
-			-1014,	// i4LeftBound				
-			-60,	// i4UpperBound				
+			-314,	// i4RightBound				
+			-964,	// i4LeftBound				
+			-170,	// i4UpperBound				
 			-260	// i4LowerBound				
 		},						
 		// Warm fluorescent						
 		{						
-			-364,	// i4RightBound				
-			-1014,	// i4LeftBound				
+			-314,	// i4RightBound				
+			-964,	// i4LeftBound				
 			-260,	// i4UpperBound				
 			-380	// i4LowerBound				
 		},						
 		// Fluorescent						
 		{						
 			-124,	// i4RightBound				
-			-364,	// i4LeftBound				
-			-124,	// i4UpperBound				
+			-314,	// i4LeftBound				
+			-179,	// i4UpperBound				
 			-269	// i4LowerBound				
 		},						
 		// CWF						
 		{						
 			-124,	// i4RightBound				
-			-364,	// i4LeftBound				
+			-314,	// i4LeftBound				
 			-269,	// i4UpperBound				
 			-401	// i4LowerBound				
 		},						
@@ -397,8 +397,8 @@ const NVRAM_CAMERA_3A_STRUCT CAMERA_3A_NVRAM_DEFAULT_VALUE =
 		// Reference area						
 		{						
 			444,	// i4RightBound				
-			-1014,	// i4LeftBound				
-			-35,	// i4UpperBound				
+			-964,	// i4LeftBound				
+			-122,	// i4UpperBound				
 			-401	// i4LowerBound				
 		},						
 		// Daylight						
@@ -434,7 +434,7 @@ const NVRAM_CAMERA_3A_STRUCT CAMERA_3A_NVRAM_DEFAULT_VALUE =
 			109,	// i4RightBound				
 			-314,	// i4LeftBound				
 			-162,	// i4UpperBound				
-			-371	// i4LowerBound				
+			-401	// i4LowerBound				
 		},						
 		// Warm fluorescent						
 		{						
@@ -513,13 +513,13 @@ const NVRAM_CAMERA_3A_STRUCT CAMERA_3A_NVRAM_DEFAULT_VALUE =
 	{							
 		// Tungsten						
 		{						
-			0,	// i4SliderValue				
-			6912	// i4OffsetThr				
+			50,	// i4SliderValue				
+			5213	// i4OffsetThr				
 		},						
 		// Warm fluorescent						
 		{						
-			0,	// i4SliderValue				
-			6912	// i4OffsetThr				
+			50,	// i4SliderValue				
+			5213	// i4OffsetThr				
 		},						
 		// Shade						
 		{						
@@ -662,9 +662,9 @@ impGetDefaultData(CAMERA_DATA_TYPE_ENUM const CameraDataType, VOID*const pDataBu
             memcpy(pDataBuf,&CAMERA_FLASH_AWB_CALIBRATION_DATA,sizeof(FLASH_AWB_CALIBRATION_DATA_STRUCT));
             break;            
         default:
-            break;
+            return 1;
     }
-    return 1;
+    return 0;
 }};  //  NSFeature
 
 

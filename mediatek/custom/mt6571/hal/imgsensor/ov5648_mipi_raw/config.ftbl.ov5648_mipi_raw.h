@@ -33,7 +33,7 @@ FTABLE_SCENE_INDEP()
                 MtkCameraParameters::SCENE_MODE_SPORTS,         
                 MtkCameraParameters::SCENE_MODE_PARTY, 
                 MtkCameraParameters::SCENE_MODE_CANDLELIGHT, 
-#if defined(USING_MTK_HDR)
+#ifdef MTK_CAM_HDR_SUPPORT 
                 MtkCameraParameters::SCENE_MODE_HDR, 
 #endif
             )
@@ -223,7 +223,8 @@ FTABLE_SCENE_INDEP()
         SCENE_AS_DEFAULT_SCENE(
             ITEM_AS_DEFAULT_(MtkCameraParameters::OFF), 
             ITEM_AS_VALUES_(
-                MtkCameraParameters::OFF
+                MtkCameraParameters::OFF, 
+                MtkCameraParameters::ON
             )
         ), 
     )
@@ -242,6 +243,8 @@ FTABLE_SCENE_INDEP()
 #endif
                 MtkCameraParameters::CAPTURE_MODE_CONTINUOUS_SHOT, 
                 MtkCameraParameters::CAPTURE_MODE_SMILE_SHOT, 
+                MtkCameraParameters::CAPTURE_MODE_AUTO_PANORAMA_SHOT,
+                MtkCameraParameters::CAPTURE_MODE_MAV_SHOT, 
                 MtkCameraParameters::CAPTURE_MODE_ASD_SHOT, 
             )
         ), 

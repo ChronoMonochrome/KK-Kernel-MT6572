@@ -134,13 +134,6 @@ MVOID
 IspTuningCustom::
 refine_OBC(RAWIspCamInfo const& rCamInfo, IspNvramRegMgr const& rIspRegMgr, ISP_NVRAM_OBC_T& rOBC)
 {
-	//Modify normal preview OBC R/B gain to reduce Preview/Capture raw color difference
-	if (rCamInfo.eIspProfile == EIspProfile_NormalPreview)
-	{
-			rOBC.gain0.val += 12;
-			rOBC.gain3.val += 12;
-	}
-	
     #if 0
     MY_LOG("%s()\n", __FUNCTION__);
     // TODO: Add your code below...

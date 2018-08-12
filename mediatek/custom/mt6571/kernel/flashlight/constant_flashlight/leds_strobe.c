@@ -77,27 +77,27 @@ static void work_timeOutFunc(struct work_struct *data);
 #define LEDS_FLASH_MODE 		1
 #define LEDS_CUSTOM_MODE_THRES 	20
 
-#ifndef GPIO_CAMERA_FLASH_EN_PIN
+#ifndef GPIO_CAMERA_FLASH_EN_PIN 
 #error "GPIO_CAMERA_FLASH_EN_PIN not defined"
 #endif
 
-#ifndef GPIO_CAMERA_FLASH_EN_PIN_M_GPIO
+#ifndef GPIO_CAMERA_FLASH_EN_PIN_M_GPIO 
 #define GPIO_CAMERA_FLASH_EN_PIN_M_GPIO GPIO_MODE_00
 #endif
 
-#ifndef GPIO_CAMERA_FLASH_MODE_PIN
+#ifndef GPIO_CAMERA_FLASH_MODE_PIN 
 #error "GPIO_CAMERA_FLASH_MODE_PIN not defined"
 #endif
 
-#ifndef GPIO_CAMERA_FLASH_MODE_PIN_M_GPIO
+#ifndef GPIO_CAMERA_FLASH_MODE_PIN_M_GPIO 
 #define GPIO_CAMERA_FLASH_MODE_PIN_M_GPIO GPIO_MODE_00
 #endif
 
 int FL_enable(void)
 {
-	PK_DBG("FL_enable");
+	PK_DBG("FL_enable");	
 	mt_set_gpio_out(GPIO_CAMERA_FLASH_EN_PIN, 1);
-
+	
 //	upmu_set_rg_bst_drv_1m_ck_pdn(0);
 //	upmu_set_flash_en(1);
     return 0;
@@ -106,7 +106,7 @@ int FL_enable(void)
 int FL_disable(void)
 {
 	PK_DBG("FL_disable");
-	mt_set_gpio_out(GPIO_CAMERA_FLASH_EN_PIN, 0);
+	mt_set_gpio_out(GPIO_CAMERA_FLASH_EN_PIN, 0);	
 //	upmu_set_flash_en(0);
 	//upmu_set_rg_bst_drv_1m_ck_pdn(1);
     return 0;
@@ -114,21 +114,26 @@ int FL_disable(void)
 
 int FL_dim_duty(kal_uint32 duty)
 {
-	PK_DBG("FL_dim_duty2 %d", duty);
-
-	if(duty==0)
+	PK_DBG("FL_dim_duty %d, thres %d", duty, LEDS_CUSTOM_MODE_THRES);
+	
+	if(duty < LEDS_CUSTOM_MODE_THRES)	
 		mt_set_gpio_out(GPIO_CAMERA_FLASH_MODE_PIN, LEDS_TORCH_MODE);
 	else
-		mt_set_gpio_out(GPIO_CAMERA_FLASH_MODE_PIN, LEDS_FLASH_MODE);
+		mt_set_gpio_out(GPIO_CAMERA_FLASH_MODE_PIN, LEDS_FLASH_MODE);	
 
+	if((g_timeOutTimeMs == 0) && (duty > LEDS_CUSTOM_MODE_THRES))
+	{
+		PK_ERR("FL_dim_duty %d > thres %d, FLASH mode but timeout %d", duty, LEDS_CUSTOM_MODE_THRES, g_timeOutTimeMs);	
+		mt_set_gpio_out(GPIO_CAMERA_FLASH_MODE_PIN, LEDS_TORCH_MODE);
+	}	
+//	upmu_set_flash_dim_duty(duty);
     return 0;
 }
 
 int FL_step(kal_uint32 step)
 {
-//	int sTab[8]={0,2,4,6,9,11,13,15};
 	PK_DBG("FL_step");
-//	upmu_set_flash_sel(sTab[step]);
+//	upmu_set_flash_sel(sTab[step]);	
     return 0;
 }
 
@@ -185,7 +190,7 @@ static int constant_flashlight_ioctl(MUINT32 cmd, MUINT32 arg)
 	int iFlashType = (int)FLASHLIGHT_NONE;
 	int ior;
 	int iow;
-	int iowr;
+	int iowr;		
 	ior = _IOR(FLASHLIGHT_MAGIC,0, int);
 	iow = _IOW(FLASHLIGHT_MAGIC,0, int);
 	iowr = _IOWR(FLASHLIGHT_MAGIC,0, int);
@@ -238,7 +243,7 @@ static int constant_flashlight_ioctl(MUINT32 cmd, MUINT32 arg)
                 PK_DBG("[strobe_ioctl] ioctl copy to user failed\n");
                 return -EFAULT;
             }
-            break;
+            break;			
 		default :
     		PK_DBG(" No such command \n");
     		i4RetValue = -EPERM;

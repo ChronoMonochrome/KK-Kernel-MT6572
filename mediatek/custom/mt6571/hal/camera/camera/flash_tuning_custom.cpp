@@ -84,7 +84,7 @@ FLASH_PROJECT_PARA& cust_getFlashProjectPara(int aeMode, NVRAM_CAMERA_STROBE_STR
 {
 	static FLASH_PROJECT_PARA para;
 
-	para.dutyNum = 2;
+	para.dutyNum = 3;
 	para.stepNum = 1;
 	//tuning
 
@@ -133,41 +133,42 @@ FLASH_PROJECT_PARA& cust_getFlashProjectPara(int aeMode, NVRAM_CAMERA_STROBE_STR
 
 	//pf, mf, normal
 	para.engLevel.pmfEngMode = ENUM_FLASH_ENG_INDEX_MODE;
-	para.engLevel.pfDuty = 0;
-	para.engLevel.mfDutyMax = 1;
+	para.engLevel.pfDuty = 1;
+	para.engLevel.mfDutyMax = 2;
 	para.engLevel.mfDutyMin = 0;
 	para.engLevel.pmfStep = 0;
 
 	//low bat
 	para.engLevel.IChangeByVBatEn=0;
 	para.engLevel.vBatL = 3550;	//mv
-	para.engLevel.pfDutyL = 0;
-	para.engLevel.mfDutyMaxL = 0;
+	para.engLevel.pfDutyL = 1;
+	para.engLevel.mfDutyMaxL = 2;
 	para.engLevel.mfDutyMinL = 0;
 	para.engLevel.pmfStepL = 0;
 
 	//burst setting
 	para.engLevel.IChangeByBurstEn=1;
-	para.engLevel.pfDutyB = 0;
-	para.engLevel.mfDutyMaxB = 0;
+	para.engLevel.pfDutyB = 1;
+	para.engLevel.mfDutyMaxB = 1;
 	para.engLevel.mfDutyMinB = 0;
 	para.engLevel.pmfStepB = 0;
 
 	//--------------------
 	//cooling delay para
 	para.coolTimeOutPara.tabMode = ENUM_FLASH_ENG_INDEX_MODE;
-	para.coolTimeOutPara.tabNum = 2;
+	para.coolTimeOutPara.tabNum = 3;
 	para.coolTimeOutPara.tabId[0]=0;
 	para.coolTimeOutPara.tabId[1]=1;
-
+	para.coolTimeOutPara.tabId[2]=2;
 	para.coolTimeOutPara.coolingTM[0]=0;
-	para.coolTimeOutPara.coolingTM[1]=5;
-
+	para.coolTimeOutPara.coolingTM[1]=0;
+	para.coolTimeOutPara.coolingTM[2]=5;
 
 	para.coolTimeOutPara.timOutMs[0]=ENUM_FLASH_TIME_NO_TIME_OUT;
-	para.coolTimeOutPara.timOutMs[1]=500;
+	para.coolTimeOutPara.timOutMs[1]=ENUM_FLASH_TIME_NO_TIME_OUT;
+	para.coolTimeOutPara.timOutMs[2]=500;
 
-
+	
 	para.maxCapExpTimeUs=100000;
 	para.pfExpFollowPline=0;
 	//para.maxPfAfe=3000;

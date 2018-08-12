@@ -18,7 +18,7 @@ static struct headset_mode_settings cust_headset_settings = {
 #else
 //headset mode register settings(for MT6575)
 static struct headset_mode_settings cust_headset_settings = {
-	0x900, 0x400, 1, 0x3f0, 0x3000, 0x3000, 0x20
+	0x900, 0x600, 1, 0x5f0, 0x3000, 0x3000, 0x400
 };
 #endif
 

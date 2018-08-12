@@ -75,7 +75,7 @@ getAWBParam()
     	// AWB convergence parameter
     	{
             10, // i4Speed: Convergence speed: (0 ~ 100)
-            400,//225 // i4StableThr: Stable threshold ((currentRgain - targetRgain)^2 + (currentBgain - targetBgain)^2), WB gain format: 4.9
+            100,//225 // i4StableThr: Stable threshold ((currentRgain - targetRgain)^2 + (currentBgain - targetBgain)^2), WB gain format: 4.9
     	},
 
         // AWB daylight locus target offset ratio LUT for tungsten
@@ -229,7 +229,7 @@ getAWBParam()
     	// Neutral parent block number threshold
     	{
           // LV0   1    2    3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18
-		    { 2,   3,   4,   5,   6,   7,   8,   9,   10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10},  // m_i4NeutralParentBlkNumThr (%)
+		    { 5,   5,   5,   5,   6,   7,   8,   9,   10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10},  // m_i4NeutralParentBlkNumThr (%)
 		    { 5,   5,   5,   5,   6,   7,   8,   9,   10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10},  // m_i4NeutralParentBlkNumThr_CWF (%)
 		    { 5,   5,   5,   5,   6,   7,   8,   9,   10,  10,  10,  10,  10,  10,  10,  10,  10,  10,  10}   // m_i4NeutralParentBlkNumThr_DF (%)
     	}
