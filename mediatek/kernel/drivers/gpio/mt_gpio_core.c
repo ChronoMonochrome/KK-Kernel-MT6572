@@ -32,6 +32,18 @@
 #include <mach/mt_gpio.h>
 #include <mach/mt_gpio_core.h>
 
+#ifndef MT_GPIO_BASE_MAX
+#error MT_GPIO_BASE_MAX is not defined
+#endif
+
+#ifndef MT_GPIO_EXT_START
+#error MT_GPIO_EXT_START  is not defined
+#endif
+
+#ifndef MT_GPIO_EXT_MAX
+#error MT_GPIO_EXT_MAX is not defined
+#endif
+
 /***********************/
 struct mt_gpio_ops{
 //	char name[MT_GPIO_MAX_NAME];
